@@ -1,0 +1,11 @@
+jupyter
+ipython
+ipykernel
+requests
+pandas
+geopandas
+shapely
+matplotlib
+folium
+passyunk
+beautifulsoup4
