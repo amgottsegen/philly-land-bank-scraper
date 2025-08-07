@@ -136,13 +136,12 @@ def query_addresses_ais(df):
 
 def write_results(output_dir, df, date):
     """
-    Query Philly's Address Information System for info on each address in a dataframe
+    Write final dataframe of normalized and geocoded addresses to current path and archive path
     
     Args:
+        output_dir: root directory for writing results
         df: a pandas DataFrame with all normalized addresses
-    
-    Returns:
-        df: a pandas DataFrame with all normalized addresses, OPA and PWD parcel IDs, and parcel coordinates
+        date: date string for archive filename
     """
     current_path = os.path.join(output_dir, 'current_agenda.csv')
     df.to_csv(current_path)
@@ -152,7 +151,7 @@ def write_results(output_dir, df, date):
     archive_path = os.path.join(archive_path_root, f"{date.replace(' ','_').lower()}.csv")
     df.to_csv(archive_path)
 
-    print(f"Wrote {len(df)} records to {archive_path}")
+    print(f"Wrote {len(df)} records to {archive_path} and {current_path}")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
