@@ -1,2 +1,6 @@
+venv
 ais_auth.json
 parsed_urls.json
+data/*
+archive/*
+*.csv

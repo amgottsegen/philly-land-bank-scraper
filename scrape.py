@@ -1,4 +1,4 @@
-import requests, sys, re, time, pdfplumber, json
+import requests, sys, re, os, time, pdfplumber, json
 import pandas as pd
 from bs4 import BeautifulSoup
 from io import BytesIO
@@ -119,7 +119,7 @@ def query_addresses_ais(df):
             continue
 
         if resp.status_code == 429:
-            print('waiting...')
+            print('waiting for 60 seconds to rate limit API usage...')
             time.sleep(60)
             resp = requests.get(url)
         elif resp.status_code != 200:
@@ -128,14 +128,40 @@ def query_addresses_ais(df):
 
         content = json.loads(resp.content)
         if 'features' in content:
-            print(f'got coordinates: {content['features'][0]['geometry']['coordinates']}')
             df.at[idx, 'lon'] = content['features'][0]['geometry']['coordinates'][0]
             df.at[idx, 'lat'] = content['features'][0]['geometry']['coordinates'][1]
             df.at[idx,'OPA'] = content['features'][0]['properties']['opa_account_num']
             df.at[idx,'PWD'] = content['features'][0]['properties']['pwd_parcel_id']
    return df
 
+def write_results(output_dir, df, date):
+    """
+    Query Philly's Address Information System for info on each address in a dataframe
+    
+    Args:
+        df: a pandas DataFrame with all normalized addresses
+    
+    Returns:
+        df: a pandas DataFrame with all normalized addresses, OPA and PWD parcel IDs, and parcel coordinates
+    """
+    current_path = os.path.join(output_dir, 'current_agenda.csv')
+    df.to_csv(current_path)
+
+    archive_path_root = os.path.join(output_dir, 'archive')
+    os.makedirs(archive_path_root, exist_ok=True)
+    archive_path = os.path.join(archive_path_root, f"{date.replace(' ','_').lower()}.csv")
+    df.to_csv(archive_path)
+
+    print(f"Wrote {len(df)} records to {archive_path}")
+
 if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        OUTPUT_DIR = "."
+        print("No output directory specified, using current working directory...")
+    elif os.path.exists(sys.argv[1]):
+        OUTPUT_DIR = sys.argv[1]
+        print(f"Writing output to {OUTPUT_DIR}...")
+
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'}
     home = requests.get("https://phillylandbank.org/philadelphia-land-bank-board/", headers=headers)
     home.raise_for_status()  # Raises an HTTPError for bad responses
@@ -143,8 +169,11 @@ if __name__ == "__main__":
     soup = BeautifulSoup(home.content, 'html.parser')
     agenda_urls = [tag.get('href') for tag in soup.find_all('a') if 'Agenda' in tag.contents[0]]
 
-    with open("parsed_urls.json") as f:
-        parsed_urls = json.load(f)
+    if os.path.exists("parsed_urls.json"):
+        with open("parsed_urls.json") as f:
+            parsed_urls = json.load(f)
+    else:
+        parsed_urls = []
     if len(agenda_urls) == len(parsed_urls):
         print("No new agendas to parse, exiting...")
         sys.exit(0)
@@ -153,19 +182,26 @@ if __name__ == "__main__":
         print(f"Scraping addresses from newly posted agenda at {agenda_url}...")
 
     all_text = fetch_and_read_pdf(agenda_url)
+    date = re.findall(r'MEETING\n.*DAY(.*?20\d\d)', all_text)[0]
+    date = date.replace(",", "")
+    date = date.strip()
+
+    print(f'Extracting addresses from agenda for PLB meeting on {date}...')
     addr_df = extract_addresses(all_text)
     full_df = query_addresses_ais(addr_df)
 
     #add meeting date and agenda url to all rows
-    full_df['PLB_AGENDA_URL'] = agenda_url
-    date = re.findall(r'MEETING\n.*DAY(.*?20\d\d)', all_text)[0]
-    date = date.replace(",", "")
-    date = date.strip()
     full_df['PLB_MEETING_DATE'] = date
+    full_df['PLB_AGENDA_URL'] = agenda_url
 
     #save results as current agenda and for archive
-    full_df.to_csv('current_agenda.csv')
-    full_df.to_csv(f'{date.replace(' ','_').lower()}.csv')
+    try:
+        write_results(OUTPUT_DIR, full_df, date)
+    except OSError as e:
+        print(f"Failed to write to {OUTPUT_DIR} with exception {e}...")
+        print("Trying to write to current working directory...")
+        write_results(".", full_df, date)
+
 
     with open("parsed_urls.json", 'w') as f:
         json.dump(agenda_urls, f)

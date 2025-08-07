@@ -10,3 +10,8 @@ Designed to be run monthly, the scraper fetches the latest agenda PDF from the L
 pip install --upgrade pip && pip install -r requirements.txt
 echo '{"key":"YOUR_AIS_KEY"}' >> ais_auth.json
 ```
+
+## Usage
+```
+python scrape.py YOUR_OUTPUT_DIRECTORY
+```

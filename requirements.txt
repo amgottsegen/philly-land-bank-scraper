@@ -9,3 +9,4 @@ matplotlib
 folium
 passyunk
 beautifulsoup4
+pdfplumber
