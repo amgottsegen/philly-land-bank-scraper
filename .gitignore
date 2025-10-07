@@ -4,3 +4,5 @@ parsed_urls.json
 data/*
 archive/*
 *.csv
+__pycache__/scrape.cpython-311.pyc
+daily.log
