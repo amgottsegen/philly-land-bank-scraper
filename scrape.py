@@ -78,9 +78,10 @@ def extract_addresses(all_text):
             streets = i.split(";")
             for j in streets:
                 #extract the street name
-                street_name = re.findall(r'^[\d\s,\-*]+(.*?)$', j)[0].strip().upper().replace(".","")
+                street_name = re.findall(r'^(?:[\d\-]+\*?(?:,\s*|\s+(?:and|&)\s+|\s*))+(.+?)$', j.strip(), re.IGNORECASE)[0].strip().upper().replace(".","")
                 #within a street name, a comma is used to seperate house numbers
-                address_numbers = j.split(",")
+                address_numbers = re.split(',|and|AND|&', j)
+                #sometimes "AND" is also used as a seperator
                 for k in address_numbers:
                     last_item = k == address_numbers[-1]
                     k = k.strip()
@@ -181,7 +182,7 @@ if __name__ == "__main__":
         print(f"Scraping addresses from newly posted agenda at {agenda_url}...")
 
     all_text = fetch_and_read_pdf(agenda_url)
-    date = re.findall(r'MEETING\n.*DAY(.*?20\d\d)', all_text)[0]
+    date = re.findall(r'MEETING\n.*DAY(.*?20\d\d)', all_text, re.IGNORECASE)[0]
     date = date.replace(",", "")
     date = date.strip()
 

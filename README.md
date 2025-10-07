@@ -15,3 +15,8 @@ echo '{"key":"YOUR_AIS_KEY"}' >> ais_auth.json
 ```
 python scrape.py YOUR_OUTPUT_DIRECTORY
 ```
+
+## To Do
+
+1. Add map viewer for monthly addresses in addition to table viewer
+2. Add monthly addresses to all_addresses.csv
