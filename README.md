@@ -16,6 +16,11 @@ echo '{"key":"YOUR_AIS_KEY"}' >> ais_auth.json
 python scrape.py YOUR_OUTPUT_DIRECTORY
 ```
 
+### Check scraper logs on hal21
+```
+tail -f ~/garden/philly-land-bank-scraper/daily.log
+```
+
 ## To Do
 
 1. Add map viewer for monthly addresses in addition to table viewer
