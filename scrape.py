@@ -1,7 +1,9 @@
+#%%
 import requests, sys, re, os, time, pdfplumber, json
 import pandas as pd
 from bs4 import BeautifulSoup
 from io import BytesIO
+from dateutil import parser
 
 with open("ais_auth.json") as f:
     AIS_KEY = json.load(f)["key"]
@@ -50,6 +52,22 @@ def fetch_and_read_pdf(url):
     except Exception as e:
         print(f"Error opening PDF: {e}")
         return None
+
+def extract_meeting_date(text):
+    # Grab the line containing a day-of-week name
+    day_pattern = r'.*(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday).*'
+    match = re.search(day_pattern, text, re.IGNORECASE)
+    
+    if not match:
+        return None
+    
+    line = match.group(0)
+    
+    # Fix OCR-mangled numbers like "2 026" -> "2026"
+    line = re.sub(r'\b(\d+)\s+(\d+)\b', r'\1\2', line)
+    
+    return parser.parse(line, fuzzy=True)  # fuzzy=True ignores non-date text in the line
+
     
 def extract_addresses(all_text):
     """
@@ -153,7 +171,7 @@ def write_results(output_dir, df, date):
     df.to_csv(archive_path)
 
     print(f"Wrote {len(df)} records to {archive_path} and {current_path}")
-
+#%%
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         OUTPUT_DIR = "."
@@ -182,9 +200,9 @@ if __name__ == "__main__":
         print(f"Scraping addresses from newly posted agenda at {agenda_url}...")
 
     all_text = fetch_and_read_pdf(agenda_url)
-    date = re.findall(r'MEETING\n.*DAY(.*?20\d\d)', all_text, re.IGNORECASE)[0]
-    date = date.replace(",", "")
-    date = date.strip()
+    #%%
+    date_obj = extract_meeting_date(all_text)
+    date = date_obj.strftime('%B %d %Y')
 
     print(f'Extracting addresses from agenda for PLB meeting on {date}...')
     addr_df = extract_addresses(all_text)
@@ -205,3 +223,4 @@ if __name__ == "__main__":
 
     with open("parsed_urls.json", 'w') as f:
         json.dump(agenda_urls, f)
+# %%
