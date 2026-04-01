@@ -4,9 +4,17 @@ import pandas as pd
 from bs4 import BeautifulSoup
 from io import BytesIO
 from dateutil import parser
+from send_mail import executeEmail
 
 with open("ais_auth.json") as f:
     AIS_KEY = json.load(f)["key"]
+
+with open("success_recipients.json") as f:
+    SUCCESS_RECIPIENTS = json.load(f)
+
+with open("fail_recipients.json") as f:
+    FAIL_RECIPIENTS = json.load(f)
+#%%
 
 def fetch_and_read_pdf(url):
     """
@@ -173,54 +181,70 @@ def write_results(output_dir, df, date):
     print(f"Wrote {len(df)} records to {archive_path} and {current_path}")
 #%%
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        OUTPUT_DIR = "."
-        print("No output directory specified, using current working directory...")
-    elif os.path.exists(sys.argv[1]):
-        OUTPUT_DIR = sys.argv[1]
-        print(f"Writing output to {OUTPUT_DIR}...")
-
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'}
-    home = requests.get("https://phillylandbank.org/philadelphia-land-bank-board/", headers=headers)
-    home.raise_for_status()  # Raises an HTTPError for bad responses
-
-    soup = BeautifulSoup(home.content, 'html.parser')
-    agenda_urls = [tag.get('href') for tag in soup.find_all('a') if 'Agenda' in tag.contents[0]]
-
-    if os.path.exists("parsed_urls.json"):
-        with open("parsed_urls.json") as f:
-            parsed_urls = json.load(f)
-    else:
-        parsed_urls = []
-    if len(agenda_urls) == len(parsed_urls):
-        print("No new agendas to parse, exiting...")
-        sys.exit(0)
-    else:
-        agenda_url = agenda_urls[0]
-        print(f"Scraping addresses from newly posted agenda at {agenda_url}...")
-
-    all_text = fetch_and_read_pdf(agenda_url)
-    #%%
-    date_obj = extract_meeting_date(all_text)
-    date = date_obj.strftime('%B %d %Y')
-
-    print(f'Extracting addresses from agenda for PLB meeting on {date}...')
-    addr_df = extract_addresses(all_text)
-    full_df = query_addresses_ais(addr_df)
-
-    #add meeting date and agenda url to all rows
-    full_df['PLB_MEETING_DATE'] = date
-    full_df['PLB_AGENDA_URL'] = agenda_url
-
-    #save results as current agenda and for archive
     try:
-        write_results(OUTPUT_DIR, full_df, date)
-    except OSError as e:
-        print(f"Failed to write to {OUTPUT_DIR} with exception {e}...")
-        print("Trying to write to current working directory...")
-        write_results(".", full_df, date)
+        if len(sys.argv) < 2:
+            OUTPUT_DIR = "."
+            print("No output directory specified, using current working directory...")
+        elif os.path.exists(sys.argv[1]):
+            OUTPUT_DIR = sys.argv[1]
+            print(f"Writing output to {OUTPUT_DIR}...")
+
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'}
+        home = requests.get("https://phillylandbank.org/philadelphia-land-bank-board/", headers=headers)
+        home.raise_for_status()  # Raises an HTTPError for bad responses
+
+        soup = BeautifulSoup(home.content, 'html.parser')
+        agenda_urls = [tag.get('href') for tag in soup.find_all('a') if 'Agenda' in tag.contents[0]]
+
+        if os.path.exists("parsed_urls.json"):
+            with open("parsed_urls.json") as f:
+                parsed_urls = json.load(f)
+        else:
+            parsed_urls = []
+        if len(agenda_urls) == len(parsed_urls):
+            print("No new agendas to parse, exiting...")
+            sys.exit(0)
+        else:
+            agenda_url = [next(url for url in agenda_urls if url not in parsed_urls)][0]
+            print(f"Scraping addresses from newly posted agenda at {agenda_url}...")
+
+        all_text = fetch_and_read_pdf(agenda_url)
+
+        date_obj = extract_meeting_date(all_text)
+        date = date_obj.strftime('%B %d %Y')
+
+        print(f'Extracting addresses from agenda for PLB meeting on {date}...')
+        addr_df = extract_addresses(all_text)
+        full_df = query_addresses_ais(addr_df)
+
+        #add meeting date and agenda url to all rows
+        full_df['PLB_MEETING_DATE'] = date
+        full_df['PLB_AGENDA_URL'] = agenda_url
+
+        #save results as current agenda and for archive
+        try:
+            write_results(OUTPUT_DIR, full_df, date)
+            out_p  = os
+            executeEmail(
+                SUCCESS_RECIPIENTS,
+                'Success: New Land Bank Agenda Available',
+                '''Extracted property data for the upcoming Land Bank Board Meeting on %s 
+                is available to view at https://cocalc-www.createlab.org/garden/explore/table_view.html
+                and availaible for download at https://cocalc-www.createlab.org/garden/current_agenda.csv''' % date
+            )
+        except OSError as e:
+            print(f"Failed to write to {OUTPUT_DIR} with exception {e}...")
+            print("Trying to write to current working directory...")
+            write_results(".", full_df, date)
 
 
-    with open("parsed_urls.json", 'w') as f:
-        json.dump(agenda_urls, f)
-# %%
+        with open("parsed_urls.json", 'w') as f:
+            json.dump(agenda_urls, f)
+    except Exception as e:
+        print(f"Script failed with exception {e}...")
+        executeEmail(
+            FAIL_RECIPIENTS,
+            'Failure: Issue with Land Bank Agenda Scraper',
+            f'The scraper failed with the following error: {e}'
+        )
+    # %%
